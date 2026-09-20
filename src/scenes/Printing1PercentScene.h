@@ -21,7 +21,16 @@
 //
 // Inhalt liegt vollstaendig innerhalb r <= 100, der Ring belegt r = 104..118.
 
+// Farbzuordnung:
+//   Prozentzahl  = Accent-Farbe, also identisch mit dem Ring. Beide zeigen
+//                  dasselbe, deshalb gehoeren sie farblich zusammen. Folgt
+//                  automatisch der Einstellung in der Weboberflaeche.
+//   Layer        = Weiss, gleichrangige Hauptinformation
+//   Temperaturen = Amber, gehoert zur Waerme
+//   Restzeit     = Stahlgrau, Nebeninformation die nicht konkurrieren soll
 #define PRINTSCREEN_WHITE 0xFFFFFF
+#define PRINTSCREEN_AMBER 0xFBBF24
+#define PRINTSCREEN_STEEL 0x94A3B8
 
 class Printing1PercentScene : public AbstractScene {
 public:
@@ -36,9 +45,9 @@ public:
     uint32_t bg = deps.styles->getBackgroundColor();
     ring = new SegmentRing(118, 104, deps.styles->getAccentColor(), 0x141B27, bg);
     layerText = new Readout(120, 66, glcd2, PRINTSCREEN_WHITE, bg);
-    pctText = new Readout(120, 118, gfxLarge, PRINTSCREEN_WHITE, bg);
-    tempText = new Readout(120, 160, glcd2, PRINTSCREEN_WHITE, bg);
-    etaText = new Readout(120, 186, glcd2, PRINTSCREEN_WHITE, bg);
+    pctText = new Readout(120, 118, gfxLarge, deps.styles->getAccentColor(), bg);
+    tempText = new Readout(120, 160, glcd2, PRINTSCREEN_AMBER, bg);
+    etaText = new Readout(120, 186, glcd2, PRINTSCREEN_STEEL, bg);
   }
 
   ~Printing1PercentScene() override {
