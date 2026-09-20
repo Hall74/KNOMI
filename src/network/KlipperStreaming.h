@@ -2,7 +2,7 @@
 #include "../config/Config.h"
 #include "esp_websocket_client.h"
 #include <WiFi.h>
-
+ 
 class KlipperStreaming {
 private:
   Config *config;
@@ -11,7 +11,7 @@ private:
   bool isReady = false;
   bool isSubscribed = false;
   bool reset = false;
-
+ 
   static void websocket_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     auto *self = (KlipperStreaming *)arg;
     switch (event_id) {
@@ -34,14 +34,14 @@ private:
       break;
     }
   }
-
+ 
   void connectionEstablished() {
     LV_LOG_INFO("WebSocket Connected");
     connected = true;
     isReady = false;
     isSubscribed = false;
   }
-
+ 
   void requestInfo() {
     String printerInfo = "{\n"
                          "    \"jsonrpc\": \"2.0\",\n"
@@ -49,12 +49,12 @@ private:
                          "    \"id\": 5153\n"
                          "}";
     esp_websocket_client_send_text(client, printerInfo.c_str(), printerInfo.length(), portMAX_DELAY);
-
+ 
     if (millis() - lastSubscribeUpdate > 30000 && isSubscribed) {
       isSubscribed = false;
       LV_LOG_WARN("Haven't received updates from subscription in a while. Going to resubscribe.");
     }
-
+ 
     if (isReady && !isSubscribed) {
       lastSubscribeUpdate = millis();
       isSubscribed = true;
@@ -77,19 +77,19 @@ private:
                          "    },\n"
                          "    \"id\": 5434\n"
                          "}";
-
+ 
       esp_websocket_client_send_text(client, subscribe.c_str(), subscribe.length(), portMAX_DELAY);
     }
-
+ 
     if (this->print_status_file_changed) {
       this->print_status_file_changed = false;
       this->requestFileMetadata();
     }
   }
-
+ 
   void requestFileMetadata() {
     LV_LOG_INFO("Requesting print metadata");
-
+ 
     String fileMetadataRequest = "{\n"
                                  "    \"id\": 66829,\n"
                                  "    \"method\": \"server.files.metadata\",\n"
@@ -100,12 +100,12 @@ private:
                                  "\"\n"
                                  "    }\n"
                                  "}";
-
+ 
     if (this->print_stats_filename != "" && isReady && isSubscribed) {
       esp_websocket_client_send_text(client, fileMetadataRequest.c_str(), fileMetadataRequest.length(), portMAX_DELAY);
     }
   }
-
+ 
   void connectionLost() {
     LV_LOG_INFO("WebSocket Disconnected");
     connected = false;
@@ -114,9 +114,9 @@ private:
     reset = true;
     this->print_stats_filename = "";
   }
-
+ 
   char *buffer = nullptr;
-
+ 
   void receiveFrame(int eventId, int len, char *data, int payloadLen, int payloadOffset) {
     LV_LOG_DEBUG("Received frame %i/%i (%i)", payloadOffset, payloadLen, len);
     if (payloadOffset == 0) {
@@ -129,43 +129,43 @@ private:
       frameComplete(buffer, payloadLen);
     }
   }
-
+ 
   void frameComplete(char *buffer, int size) {
     JsonDocument filter;
     filter["method"] = true;
     filter["id"] = true;
-
+ 
     JsonDocument doc;
     deserializeJson(doc, buffer, DeserializationOption::Filter(filter));
-
+ 
     String method = doc["method"].as<String>();
     int id = doc["id"].as<int>();
-
+ 
     if (method == "notify_proc_stat_update" || method == "notify_service_state_changed" ||
         method == "notify_filelist_changed" || method == "notify_gcode_response") {
       LV_LOG_DEBUG("Frame complete: %s", method.c_str());
       return;
     }
-
+ 
     if (method == "notify_klippy_disconected") {
       LV_LOG_INFO("Klipper disconnected");
       isReady = false;
       return;
     }
-
+ 
     if (method == "notify_klippy_ready") {
       LV_LOG_INFO("Klipper connected");
       isReady = true;
       return;
     }
-
+ 
     if (method == "notify_status_update") {
       deserializeJson(doc, buffer);
       const JsonObject &object = doc["params"][0].as<JsonObject>();
       parseResponseObjects(object);
       return;
     }
-
+ 
     if (id == 5434) {
       lastSubscribeUpdate = millis();
       deserializeJson(doc, buffer);
@@ -173,12 +173,12 @@ private:
       parseResponseObjects(obj);
       return;
     }
-
+ 
     if (id == 5153) {
       filter["result"]["state"] = true;
       deserializeJson(doc, buffer, DeserializationOption::Filter(filter));
       String state = doc["result"]["state"].as<String>();
-
+ 
       bool newIsReady = state == "ready";
       if (newIsReady != isReady) {
         isReady = newIsReady;
@@ -186,10 +186,10 @@ private:
       }
       return;
     }
-
+ 
     if (id == 66829) {
       deserializeJson(doc, buffer);
-
+ 
       if (doc["result"].is<JsonObject>()) {
         const JsonObject &result = doc["result"].as<JsonObject>();
         if (result["gcode_start_byte"].is<int>()) {
@@ -213,7 +213,7 @@ private:
     }
     // LV_LOG_INFO("Unexpected frame: %.*s", size, buffer);
   }
-
+ 
   void parseResponseObjects(const JsonObject &object) {
     for (JsonPair iter : object) {
       String key = iter.key().c_str();
@@ -259,10 +259,10 @@ private:
         }
         if (value["filename"].is<String>()) {
           String newFilename = value["filename"].as<String>();
-
+ 
           if (newFilename != this->print_stats_filename) {
             this->print_stats_filename = newFilename;
-
+ 
             // Prevent stale data causing us to report the print as complete
             this->file_filament_total = 0;
             this->file_gcode_end_byte = 0;
@@ -270,9 +270,9 @@ private:
             this->file_estimated_time = 0;
             this->current_layer = 0;
             this->total_layer = 0;
-
+ 
             this->print_status_file_changed = true;
-
+ 
             LV_LOG_INFO("File changed, new filename: %s will trigger metadata fetch on next tick",
                         this->print_stats_filename.c_str());
           }
@@ -325,12 +325,12 @@ private:
       }
     }
   }
-
+ 
   void updatePosition(const JsonObject &value) {
     if (!value["position"].is<JsonArray>()) {
       return;
     }
-
+ 
     const JsonArray &arr = value["position"];
     size_t cnt = arr.size();
     if (cnt > 0) {
@@ -350,7 +350,7 @@ private:
       LV_LOG_INFO("Position E: %f", this->positionE);
     }
   }
-
+ 
   void updateHeaterBed(JsonObject &object) {
     if (object["temperature"].is<float>()) {
       float newTemperature = object["temperature"].as<float>();
@@ -369,7 +369,7 @@ private:
       }
     }
   }
-
+ 
   void updateExtruder(JsonObject &object) {
     if (object["temperature"].is<float>()) {
       float newTemperature = object["temperature"].as<float>();
@@ -388,7 +388,7 @@ private:
       }
     }
   }
-
+ 
   // Kurz halten. Das Display ist 240 px breit, und TextLabel/Readout loeschen
   // vor dem Zeichnen ein Rechteck in voller Textbreite. "215.00 C" waere in
   // Montserrat 20pt rund 180 px breit - das Rechteck wischt dann die Grafik
@@ -399,23 +399,23 @@ private:
     snprintf(buf, sizeof(buf), "%d", (int)lround(value));
     return String(buf);
   }
-
+ 
 public:
   unsigned long lastRequest = 0;
   unsigned long lastSubscribeUpdate = 0;
-
+ 
   bool connected = false;
-
+ 
   float bedTemperature = 0;
   float bedTarget = 0;
   float extruderTemperature = 0;
   float extruderTarget = 0;
-
+ 
   String bedTemperatureString = "";
   String bedTargetString = "";
   String extruderTemperatureString = "";
   String extruderTargetString = "";
-
+ 
   float positionX = 0;
   float positionY = 0;
   float positionZ = 0;
@@ -430,28 +430,28 @@ public:
   int file_gcode_start_byte = 0;
   int file_gcode_end_byte = 0;
   float file_filament_total = 0;
-
+ 
   float print_duration = 0;      // reine Druckzeit in Sekunden
   float total_duration = 0;      // inklusive Aufheizen
   float file_estimated_time = 0; // Schaetzung des Slicers
   int current_layer = 0;
   int total_layer = 0;
-
+ 
   bool homing = false;
   bool probing = false;
   bool qgling = false;
   bool heating_nozzle = false;
   bool heating_bed = false;
-
+ 
   String toolheadStatus;
   String printState; // standby, printing, paused, error, complete
-
+ 
   bool isPrinting() const { return printState == "printing"; };
-
+ 
   bool isHeatingBed() const { return heating_bed || bedTemperature + 3 < bedTarget; };
-
+ 
   bool isHeatingExtruder() const { return heating_nozzle || extruderTemperature + 3 < extruderTarget; };
-
+ 
   // Restzeit in Sekunden, 0 = nicht bestimmbar.
   //
   // Bevorzugt die Schaetzung des Slicers, korrigiert sie aber mit dem
@@ -464,7 +464,7 @@ public:
   // hochgerechnet - ungenauer, aber besser als nichts.
   int remainingSeconds(float progressPercent) const {
     float p = progressPercent / 100.0f;
-
+ 
     if (file_estimated_time > 1 && p > 0.002f) {
       float scale = 1.0f;
       if (print_duration > 30 && p > 0.05f) {
@@ -477,34 +477,34 @@ public:
       float rest = file_estimated_time * scale * (1.0f - p);
       return rest > 0 ? (int)rest : 0;
     }
-
+ 
     if (print_duration > 30 && p > 0.02f)
       return (int)(print_duration * (1.0f - p) / p);
-
+ 
     return 0;
   }
-
+ 
   explicit KlipperStreaming(Config *config) { this->config = config; }
-
+ 
   void start() {
     if (client != nullptr) {
       return;
     }
     LV_LOG_INFO("Starting websocket client");
-
+ 
     this->uri = "ws://" + config->getKlipperConfig()->getHost() + "/websocket";
     esp_websocket_client_config_t websocket_cfg = {};
     websocket_cfg.uri = uri.c_str();
     websocket_cfg.disable_auto_reconnect = false;
-
+ 
     client = esp_websocket_client_init(&websocket_cfg);
     LV_LOG_INFO("Client created %i", client == nullptr);
     esp_websocket_register_events(client, WEBSOCKET_EVENT_ANY, websocket_event_handler, (void *)this);
-
+ 
     LV_LOG_INFO("Client start");
     esp_websocket_client_start(client);
   }
-
+ 
   void stop() {
     if (client != nullptr) {
       if (esp_websocket_client_is_connected(client)) {
@@ -513,20 +513,20 @@ public:
       esp_websocket_client_stop(client);
       esp_websocket_client_destroy(client);
       client = nullptr;
-
+ 
       connected = false;
       isSubscribed = false;
     }
   }
-
+ 
   ~KlipperStreaming() { stop(); }
-
+ 
   void tick() {
     if (millis() - lastRequest <= 1000)
       return;
-
+ 
     lastRequest = millis();
-
+ 
     if (reset) {
       connected = false;
       isSubscribed = false;
@@ -534,13 +534,13 @@ public:
       stop();
       return;
     }
-
+ 
     if (WiFi.isConnected()) {
       start();
     } else {
       stop();
     }
-
+ 
     if (connected) {
       if (!esp_websocket_client_is_connected(client)) {
         connected = false;
