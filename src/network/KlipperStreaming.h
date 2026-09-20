@@ -67,7 +67,8 @@ private:
                          "            \"toolhead\": [\"position\", \"status\"],\n"
                          "            \"extruder\": null,\n"
                          "            \"heater_bed\": null,\n"
-                         "            \"print_stats\":[\"state\",\"filament_used\", \"filename\"],"
+                         "            \"print_stats\":[\"state\",\"filament_used\", \"filename\", "
+                         "\"print_duration\", \"total_duration\", \"info\"],"
                          "            \"virtual_sdcard\":[\"progress\", \"file_position\", \"is_active\"],"
                          "            \"display_status\":[\"progress\"],"
                          "            \"idle_timeout\":[\"state\"],"
@@ -203,6 +204,10 @@ private:
           this->file_filament_total = result["filament_total"].as<float>();
           LV_LOG_INFO("Filament total: %f", this->file_filament_total);
         }
+        if (result["estimated_time"].is<float>()) {
+          this->file_estimated_time = result["estimated_time"].as<float>();
+          LV_LOG_INFO("Estimated time: %f", this->file_estimated_time);
+        }
       }
       return;
     }
@@ -226,6 +231,24 @@ private:
           LV_LOG_INFO("Toolhead status: %s", toolheadStatus.c_str());
         }
       } else if (key == "print_stats") {
+        if (value["print_duration"].is<float>()) {
+          this->print_duration = value["print_duration"].as<float>();
+        }
+        if (value["total_duration"].is<float>()) {
+          this->total_duration = value["total_duration"].as<float>();
+        }
+        // Moonraker liefert hier null, wenn der Slicer kein
+        // SET_PRINT_STATS_INFO sendet - dann bleibt total_layer bei 0 und die
+        // Anzeige weicht von selbst auf die Z-Hoehe aus.
+        if (value["info"].is<JsonObject>()) {
+          JsonObject layerInfo = value["info"].as<JsonObject>();
+          if (layerInfo["current_layer"].is<int>()) {
+            this->current_layer = layerInfo["current_layer"].as<int>();
+          }
+          if (layerInfo["total_layer"].is<int>()) {
+            this->total_layer = layerInfo["total_layer"].as<int>();
+          }
+        }
         if (value["filament_used"].is<float>()) {
           this->filament_used = value["filament_used"].as<float>();
           LV_LOG_INFO("Filament used: %f", this->filament_used);
@@ -244,6 +267,9 @@ private:
             this->file_filament_total = 0;
             this->file_gcode_end_byte = 0;
             this->file_gcode_start_byte = 0;
+            this->file_estimated_time = 0;
+            this->current_layer = 0;
+            this->total_layer = 0;
 
             this->print_status_file_changed = true;
 
@@ -400,6 +426,12 @@ public:
   int file_gcode_end_byte = 0;
   float file_filament_total = 0;
 
+  float print_duration = 0;      // reine Druckzeit in Sekunden
+  float total_duration = 0;      // inklusive Aufheizen
+  float file_estimated_time = 0; // Schaetzung des Slicers
+  int current_layer = 0;
+  int total_layer = 0;
+
   bool homing = false;
   bool probing = false;
   bool qgling = false;
@@ -414,6 +446,38 @@ public:
   bool isHeatingBed() const { return heating_bed || bedTemperature + 3 < bedTarget; };
 
   bool isHeatingExtruder() const { return heating_nozzle || extruderTemperature + 3 < extruderTarget; };
+
+  // Restzeit in Sekunden, 0 = nicht bestimmbar.
+  //
+  // Bevorzugt die Schaetzung des Slicers, korrigiert sie aber mit dem
+  // tatsaechlichen Verlauf: druckt die Maschine langsamer als geschaetzt,
+  // waechst die Restzeit mit. Der Korrekturfaktor ist auf 0,5 bis 2,0
+  // begrenzt, damit ein Ausreisser in den ersten Prozent die Anzeige nicht
+  // unbrauchbar macht.
+  //
+  // Ohne Slicer-Schaetzung wird linear aus der bisherigen Laufzeit
+  // hochgerechnet - ungenauer, aber besser als nichts.
+  int remainingSeconds(float progressPercent) const {
+    float p = progressPercent / 100.0f;
+
+    if (file_estimated_time > 1 && p > 0.002f) {
+      float scale = 1.0f;
+      if (print_duration > 30 && p > 0.05f) {
+        scale = print_duration / (file_estimated_time * p);
+        if (scale < 0.5f)
+          scale = 0.5f;
+        if (scale > 2.0f)
+          scale = 2.0f;
+      }
+      float rest = file_estimated_time * scale * (1.0f - p);
+      return rest > 0 ? (int)rest : 0;
+    }
+
+    if (print_duration > 30 && p > 0.02f)
+      return (int)(print_duration * (1.0f - p) / p);
+
+    return 0;
+  }
 
   explicit KlipperStreaming(Config *config) { this->config = config; }
 
