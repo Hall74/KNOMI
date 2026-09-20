@@ -389,10 +389,15 @@ private:
     }
   }
 
+  // Kurz halten. Das Display ist 240 px breit, und TextLabel/Readout loeschen
+  // vor dem Zeichnen ein Rechteck in voller Textbreite. "215.00 C" waere in
+  // Montserrat 20pt rund 180 px breit - das Rechteck wischt dann die Grafik
+  // links und rechts mit weg. Als reine Ganzzahl sind es etwa 70 px.
+  // Ein Grad-Zeichen enthaelt die Schrift nicht, deshalb ohne Einheit.
   static String formatTemperature(double value) {
-    String formatted = String(value, 2);
-    // TODO return degree (°) sign
-    return formatted + " C";
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%d", (int)lround(value));
+    return String(buf);
   }
 
 public:

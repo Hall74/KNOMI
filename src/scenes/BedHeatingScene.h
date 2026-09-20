@@ -12,34 +12,38 @@
 
 // Sollwert zurueckgenommen, Istwert in Amber - so sieht man auf einen Blick,
 // welche der beiden Zahlen sich bewegt.
+// Beide Heiz-Szenen landen in derselben Uebersetzungseinheit, deshalb der
+// Schutz gegen doppelte Definition.
+#ifndef HEATSCENE_TARGET
 #define HEATSCENE_TARGET 0x94A3B8
 #define HEATSCENE_ACTUAL 0xFBBF24
+#endif
 
-class ExtruderHeatingScene : public AbstractScene {
+class BedHeatingScene : public AbstractScene {
 private:
   ResourceImage *ri_img;
   Readout *actualTemp;
   Readout *targetTemp;
 
 public:
-  explicit ExtruderHeatingScene(SceneDeps deps) : AbstractScene(deps) {
+  explicit BedHeatingScene(SceneDeps deps) : AbstractScene(deps) {
     uint32_t bg = deps.styles->getBackgroundColor();
     int cx = deps.displayHAL->tft->width() / 2;
     int cy = deps.displayHAL->tft->height() / 2;
 
-    ri_img = KnownResourceImages::get_ext_temp();
+    ri_img = KnownResourceImages::get_bed_temp();
     targetTemp = new Readout(cx, cy - 75, gfxSmall, HEATSCENE_TARGET, bg);
     actualTemp = new Readout(cx, cy + 75, gfxSmall, HEATSCENE_ACTUAL, bg);
   }
 
-  ~ExtruderHeatingScene() override {
+  ~BedHeatingScene() override {
     delete ri_img;
     delete actualTemp;
     delete targetTemp;
   }
 
   SwitchSceneRequest *NextScene() override {
-    if (!deps.klipperStreaming->isHeatingExtruder()) {
+    if (!deps.klipperStreaming->isHeatingBed()) {
       return new SwitchSceneRequest(deps, SceneId::Standby);
     }
 
@@ -47,8 +51,8 @@ public:
   }
 
   void Tick() override {
-    targetTemp->setText(deps.klipperStreaming->extruderTargetString);
-    actualTemp->setText(deps.klipperStreaming->extruderTemperatureString);
+    targetTemp->setText(deps.klipperStreaming->bedTargetString);
+    actualTemp->setText(deps.klipperStreaming->bedTemperatureString);
 
     ri_img->tick(deps.displayHAL);
     targetTemp->tick(deps.displayHAL);

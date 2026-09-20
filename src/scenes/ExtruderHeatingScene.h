@@ -12,8 +12,12 @@
 
 // Sollwert zurueckgenommen, Istwert in Amber - so sieht man auf einen Blick,
 // welche der beiden Zahlen sich bewegt.
+// Beide Heiz-Szenen landen in derselben Uebersetzungseinheit, deshalb der
+// Schutz gegen doppelte Definition.
+#ifndef HEATSCENE_TARGET
 #define HEATSCENE_TARGET 0x94A3B8
 #define HEATSCENE_ACTUAL 0xFBBF24
+#endif
 
 class ExtruderHeatingScene : public AbstractScene {
 private:
